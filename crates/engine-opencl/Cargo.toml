@@ -1,0 +1,16 @@
+[package]
+name = "engine-opencl"
+version.workspace = true
+edition.workspace = true
+publish = false
+description = "OpenCL mining engine (AMD and other OpenCL GPUs), OpenCL loaded at runtime"
+
+[dependencies]
+engine-cpu = { path = "../engine-cpu" }
+libloading = "0.8"
+log = { workspace = true }
+pow-core = { path = "../pow-core" }
+primitive-types = { workspace = true }
+
+[dev-dependencies]
+hex = { workspace = true }

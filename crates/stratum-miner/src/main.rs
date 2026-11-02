@@ -47,7 +47,10 @@ struct Args {
 	/// Native CUDA engine instead of wgpu/Vulkan (NVIDIA)
 	#[arg(long)]
 	cuda_gpu: bool,
-	/// GPU batch size in nonces (default 1000000, 32000000 with --cuda-gpu)
+	/// Use the official wgpu/Vulkan engine instead of our OpenCL engine (AMD/Intel)
+	#[arg(long)]
+	wgpu: bool,
+	/// GPU batch size in nonces (default 32000000 CUDA, 16000000 OpenCL, 1000000 wgpu)
 	#[arg(long)]
 	gpu_batch_size: Option<u32>,
 	/// Allow integrated GPUs
@@ -415,30 +418,33 @@ fn handle_api(mut stream: TcpStream, token: &str, state: &State) -> std::io::Res
 // ---------------------------------------------------------------------------------------------
 
 fn main() -> anyhow::Result<()> {
-	env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,cuda_engine=warn,engine_gpu=warn,engine_cuda=warn"))
+	env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,cuda_engine=warn,engine_gpu=warn,engine_cuda=warn,opencl_engine=info"))
 		.format_timestamp_millis()
 		.init();
 	let args = Args::parse();
 	log::info!("quantus-iniaku {VERSION} (official Quantus engines, LuckyPool stratum) — 2% fee");
 
-	let gpu_batch = args.gpu_batch_size.unwrap_or(if args.cuda_gpu { 32_000_000 } else { 1_000_000 });
-	let cuda = if args.cuda_gpu {
-		match miner_service::resolve_cuda_configuration(args.gpu_devices, gpu_batch, 0) {
-			Ok(r) => Some(r),
-			Err(e) => {
-				// e.g. AMD/Intel GPU or no NVIDIA driver: use wgpu (Vulkan / DX12 / Metal) instead
-				log::warn!("CUDA not available ({e:#}), falling back to wgpu");
-				None
-			}
+	// Engine order: CUDA (NVIDIA, --cuda-gpu) -> OpenCL (our kernel, AMD and others) -> wgpu.
+	let mut engine = None;
+	let mut gpu_batch = args.gpu_batch_size.unwrap_or(1_000_000);
+	if args.cuda_gpu {
+		let batch = args.gpu_batch_size.unwrap_or(32_000_000);
+		match miner_service::resolve_cuda_configuration(args.gpu_devices, batch, 0) {
+			Ok(r) => { engine = Some(r); gpu_batch = batch; }
+			Err(e) => log::warn!("CUDA not available ({e:#}), trying OpenCL"),
 		}
-	} else {
-		None
-	};
-	let (gpu_engine, gpu_devices) = match cuda {
+	}
+	if engine.is_none() && !args.wgpu {
+		let batch = args.gpu_batch_size.unwrap_or(16_000_000);
+		match miner_service::resolve_opencl_configuration(args.gpu_devices, batch, 0) {
+			Ok(r) => { engine = Some(r); gpu_batch = batch; }
+			Err(e) => log::warn!("OpenCL not available ({e:#}), falling back to wgpu (Vulkan)"),
+		}
+	}
+	let (gpu_engine, gpu_devices) = match engine {
 		Some(r) => r,
 		None => {
-			let wgpu_batch = args.gpu_batch_size.unwrap_or(1_000_000);
-			miner_service::resolve_gpu_configuration(args.gpu_devices, wgpu_batch, 0, args.allow_integrated)?
+			miner_service::resolve_gpu_configuration(args.gpu_devices, gpu_batch, 0, args.allow_integrated)?
 		}
 	};
 	if args.cpu_workers == 0 && gpu_devices == 0 {

@@ -3,6 +3,7 @@ members = [
 	"crates/engine-cpu",
 	"crates/engine-cuda",
 	"crates/engine-gpu",
+	"crates/engine-opencl",
 	"crates/metrics",
 	"crates/miner-cli",
 	"crates/miner-service",

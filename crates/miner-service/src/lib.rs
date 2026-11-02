@@ -584,6 +584,31 @@ pub fn resolve_cuda_configuration(
     Ok((Some(Arc::new(engine)), count))
 }
 
+/// Resolve the OpenCL engine (AMD and other OpenCL GPUs).
+pub fn resolve_opencl_configuration(
+    requested_devices: Option<usize>,
+    batch_size: u32,
+    throttle_ms: u64,
+) -> anyhow::Result<(Option<Arc<dyn MinerEngine>>, usize)> {
+    if requested_devices == Some(0) {
+        return Ok((None, 0));
+    }
+    let engine = engine_opencl::OpenClEngine::try_new(batch_size, throttle_ms)
+        .map_err(|e| anyhow::anyhow!("Failed to initialize OpenCL engine: {e}"))?;
+    let available = engine.device_count();
+    let count = match requested_devices {
+        Some(n) if n > available => {
+            anyhow::bail!("Requested {n} OpenCL devices but only {available} available");
+        }
+        Some(n) => n,
+        None => {
+            log::info!("Auto-detected {available} OpenCL device(s)");
+            available
+        }
+    };
+    Ok((Some(Arc::new(engine)), count))
+}
+
 /// Resolve GPU configuration and initialize the engine.
 pub fn resolve_gpu_configuration(
     requested_devices: Option<usize>,
