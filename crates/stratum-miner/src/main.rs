@@ -415,7 +415,7 @@ fn handle_api(mut stream: TcpStream, token: &str, state: &State) -> std::io::Res
 // ---------------------------------------------------------------------------------------------
 
 fn main() -> anyhow::Result<()> {
-	env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
+	env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info,cuda_engine=warn,engine_gpu=warn,engine_cuda=warn"))
 		.format_timestamp_millis()
 		.init();
 	let args = Args::parse();
