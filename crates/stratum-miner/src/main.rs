@@ -422,10 +422,24 @@ fn main() -> anyhow::Result<()> {
 	log::info!("quantus-iniaku {VERSION} (official Quantus engines, LuckyPool stratum) — 2% fee");
 
 	let gpu_batch = args.gpu_batch_size.unwrap_or(if args.cuda_gpu { 32_000_000 } else { 1_000_000 });
-	let (gpu_engine, gpu_devices) = if args.cuda_gpu {
-		miner_service::resolve_cuda_configuration(args.gpu_devices, gpu_batch, 0)?
+	let cuda = if args.cuda_gpu {
+		match miner_service::resolve_cuda_configuration(args.gpu_devices, gpu_batch, 0) {
+			Ok(r) => Some(r),
+			Err(e) => {
+				// e.g. AMD/Intel GPU or no NVIDIA driver: use wgpu (Vulkan / DX12 / Metal) instead
+				log::warn!("CUDA not available ({e:#}), falling back to wgpu");
+				None
+			}
+		}
 	} else {
-		miner_service::resolve_gpu_configuration(args.gpu_devices, gpu_batch, 0, args.allow_integrated)?
+		None
+	};
+	let (gpu_engine, gpu_devices) = match cuda {
+		Some(r) => r,
+		None => {
+			let wgpu_batch = args.gpu_batch_size.unwrap_or(1_000_000);
+			miner_service::resolve_gpu_configuration(args.gpu_devices, wgpu_batch, 0, args.allow_integrated)?
+		}
 	};
 	if args.cpu_workers == 0 && gpu_devices == 0 {
 		anyhow::bail!("no GPU found and --cpu-workers is 0");
