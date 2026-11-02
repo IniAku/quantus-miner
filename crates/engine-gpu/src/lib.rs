@@ -623,7 +623,7 @@ impl MinerEngine for GpuEngine {
         let mut current_start = range.start;
         let mut batch_num = 0u64;
 
-        log::info!(
+        log::debug!(
             target: "gpu_engine",
             "GPU device {} search started: range {}..{}, batch size: {} nonces",
             device_index,
@@ -763,7 +763,7 @@ impl MinerEngine for GpuEngine {
         // Range exhausted without finding solution
         let elapsed = search_start.elapsed();
         let hash_rate = total_hashes as f64 / elapsed.as_secs_f64();
-        log::info!(
+        log::debug!(
             target: "gpu_engine",
             "GPU device {} search exhausted: {} hashes in {} batches ({:.2}s, {})",
             device_index,
