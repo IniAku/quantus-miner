@@ -5,7 +5,7 @@
 //! Quantus engines (CPU, wgpu, CUDA). An XMRig-style HTTP API (/2/summary, /json_rpc
 //! pause/resume) lets iniaku-miner run it on the GPU between Epic ProgPoW turns.
 //!
-//! Fee: 2% of the mining time (1 minute after 49 minutes), never while paused.
+//! Fee: 1% of the mining time (1 minute after 99 minutes), never while paused.
 //!
 //! Licensed under the Apache License 2.0, like the official quantus-miner it builds on.
 
@@ -24,7 +24,7 @@ use std::time::{Duration, Instant};
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 const FEE_WALLET: &str = "qzpcmexVVvSeU3d3HgpeCekTBCfv4Fpaqa2tvE63EUzjnBVj8";
 const FEE_SLICE: Duration = Duration::from_secs(60);
-const FEE_EVERY: Duration = Duration::from_secs(49 * 60);
+const FEE_EVERY: Duration = Duration::from_secs(99 * 60);
 
 #[derive(Parser, Debug, Clone)]
 #[command(name = "quantus-iniaku", version, about = "Quantus pool miner (LuckyPool stratum) for iniaku-miner")]
@@ -441,7 +441,7 @@ fn main() -> anyhow::Result<()> {
 	if let Some(p) = args.opencl_platform.as_deref() {
 		std::env::set_var("QUANTUS_OPENCL_PLATFORM", p);
 	}
-	log::info!("quantus-iniaku {VERSION} (official Quantus engines, LuckyPool stratum) — 2% fee");
+	log::info!("quantus-iniaku {VERSION} (official Quantus engines, LuckyPool stratum) — 1% fee");
 
 	// Engine order: CUDA (NVIDIA, --cuda-gpu) -> OpenCL (our kernel, AMD and others) -> wgpu.
 	let mut engine = None;
@@ -532,7 +532,7 @@ fn main() -> anyhow::Result<()> {
 		});
 	}
 
-	// pool session; leaves for a 1 minute fee slice after 49 minutes of (unpaused) mining
+	// pool session; leaves for a 1 minute fee slice after 99 minutes of (unpaused) mining
 	let fee_login = format!("{FEE_WALLET}.iniaku-fee");
 	let fee_due = || state.mined_ms.load(Ordering::Relaxed) >= FEE_EVERY.as_millis() as u64 && !state.paused.load(Ordering::Relaxed);
 	loop {
@@ -544,7 +544,7 @@ fn main() -> anyhow::Result<()> {
 			continue;
 		}
 		state.mined_ms.fetch_sub(FEE_EVERY.as_millis() as u64, Ordering::Relaxed);
-		log::info!("fee 2% started (60 s)");
+		log::info!("fee 1% started (60 s)");
 		// the fee slice only counts down while mining (a pause stretches it)
 		let mut left = FEE_SLICE;
 		let mut tick = Instant::now();

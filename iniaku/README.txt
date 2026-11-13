@@ -15,7 +15,7 @@ between Epic Cash ProgPoW turns. It can also run on its own:
   --api-token T        token required for pause/resume
   --paused             start paused
 
-Fee: 2% of the mining time (1 minute after 49 minutes of mining, never while paused).
+Fee: 1% of the mining time (1 minute after 99 minutes of mining, never while paused).
 The CUDA engine needs the NVIDIA driver; NVRTC (nvrtc64_*.dll / libnvrtc.so.12) must be
 next to the miner or on the library path.
 
