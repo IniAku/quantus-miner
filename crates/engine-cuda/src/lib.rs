@@ -86,6 +86,17 @@ thread_local! {
     static DEVICE_LOST: RefCell<Option<usize>> = const { RefCell::new(None) };
 }
 
+/// GPU numbers to mine on, from QUANTUS_GPU_IDS (e.g. "1,2"; set by quantus-iniaku --gpu-ids).
+/// None = every GPU.
+fn selected_gpu_ids() -> Option<Vec<usize>> {
+    let raw = std::env::var("QUANTUS_GPU_IDS").ok()?;
+    let ids: Vec<usize> = raw
+        .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+    if ids.is_empty() { None } else { Some(ids) }
+}
+
 impl CudaEngine {
     pub fn try_new(batch_size: u32, throttle_ms: u64) -> Result<Self, Box<dyn std::error::Error>> {
         if batch_size == 0 {
@@ -112,7 +123,12 @@ impl CudaEngine {
 
         let mut devices = Vec::new();
         let mut compiled: HashMap<(i32, i32), Ptx> = HashMap::new();
+        let wanted = selected_gpu_ids();
         for ordinal in 0..count as usize {
+            if wanted.as_ref().is_some_and(|w| !w.contains(&ordinal)) {
+                log::info!(target: "cuda_engine", "CUDA device {ordinal}: not selected (--gpu-ids), skipped");
+                continue;
+            }
             let ctx = CudaContext::new(ordinal)
                 .map_err(|e| format!("Failed to create CUDA context for device {ordinal}: {e}"))?;
             ctx.set_blocking_synchronize().map_err(|e| {
@@ -162,6 +178,9 @@ impl CudaEngine {
             devices.push(Arc::new(CudaDevice { ctx, module, name }));
         }
 
+        if devices.is_empty() {
+            return Err(format!("none of the selected GPUs {wanted:?} exist ({count} CUDA device(s))").into());
+        }
         log::info!(
             target: "cuda_engine",
             "CUDA engine initialized with {} device(s) (batch size: {batch_size} nonces, throttle: {throttle_ms}ms)",

@@ -25,6 +25,7 @@ pub const CL_DEVICE_MAX_COMPUTE_UNITS: cl_uint = 0x1002;
 pub const CL_DEVICE_NAME: cl_uint = 0x102B;
 pub const CL_DEVICE_VENDOR: cl_uint = 0x102C;
 pub const CL_PLATFORM_NAME: cl_uint = 0x0902;
+pub const CL_PLATFORM_VENDOR: cl_uint = 0x0903;
 pub const CL_PROGRAM_BUILD_LOG: cl_uint = 0x1183;
 pub const CL_MEM_READ_WRITE: cl_bitfield = 1 << 0;
 pub const CL_MEM_READ_ONLY: cl_bitfield = 1 << 2;

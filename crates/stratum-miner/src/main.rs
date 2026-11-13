@@ -41,9 +41,16 @@ struct Args {
 	/// CPU worker threads (default 0 = GPU only)
 	#[arg(long, default_value_t = 0)]
 	cpu_workers: usize,
-	/// GPU devices (default: all detected)
+	/// Number of GPUs (default: all detected, or all in --gpu-ids)
 	#[arg(long)]
 	gpu_devices: Option<usize>,
+	/// Which GPUs to mine on, e.g. "1" or "0,2" (same numbering as iniaku-miner "devices":
+	/// OpenCL GPUs on --opencl-platform; CUDA in PCI bus order). Default: all
+	#[arg(long)]
+	gpu_ids: Option<String>,
+	/// OpenCL platform for --gpu-ids (index or part of the name, e.g. "NVIDIA"); default: all platforms
+	#[arg(long)]
+	opencl_platform: Option<String>,
 	/// Native CUDA engine instead of wgpu/Vulkan (NVIDIA)
 	#[arg(long)]
 	cuda_gpu: bool,
@@ -422,6 +429,18 @@ fn main() -> anyhow::Result<()> {
 		.format_timestamp_millis()
 		.init();
 	let args = Args::parse();
+	// The engines read the GPU selection from the environment (set before they are created).
+	if let Some(ids) = args.gpu_ids.as_deref().map(str::trim).filter(|s| !s.is_empty() && !s.eq_ignore_ascii_case("all")) {
+		std::env::set_var("QUANTUS_GPU_IDS", ids);
+		// CUDA numbers GPUs fastest-first by default; PCI bus order matches OpenCL/iniaku-miner.
+		if std::env::var_os("CUDA_DEVICE_ORDER").is_none() {
+			std::env::set_var("CUDA_DEVICE_ORDER", "PCI_BUS_ID");
+		}
+		log::info!("GPU selection: {ids}");
+	}
+	if let Some(p) = args.opencl_platform.as_deref() {
+		std::env::set_var("QUANTUS_OPENCL_PLATFORM", p);
+	}
 	log::info!("quantus-iniaku {VERSION} (official Quantus engines, LuckyPool stratum) — 2% fee");
 
 	// Engine order: CUDA (NVIDIA, --cuda-gpu) -> OpenCL (our kernel, AMD and others) -> wgpu.

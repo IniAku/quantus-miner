@@ -114,6 +114,17 @@ fn build_program(api: &Api, context: cl_context, dev: cl_device_id, name: &str) 
     Ok(program)
 }
 
+/// GPU numbers to mine on, from QUANTUS_GPU_IDS (e.g. "1,2"; set by quantus-iniaku --gpu-ids).
+/// None = every GPU.
+fn selected_gpu_ids() -> Option<Vec<usize>> {
+    let raw = std::env::var("QUANTUS_GPU_IDS").ok()?;
+    let ids: Vec<usize> = raw
+        .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+        .filter_map(|s| s.trim().parse().ok())
+        .collect();
+    if ids.is_empty() { None } else { Some(ids) }
+}
+
 impl OpenClEngine {
     pub fn try_new(batch_size: u32, throttle_ms: u64) -> Result<Self, Box<dyn std::error::Error>> {
         if batch_size == 0 {
@@ -131,9 +142,24 @@ impl OpenClEngine {
         let mut platforms = vec![std::ptr::null_mut(); n as usize];
         check(unsafe { (api.clGetPlatformIDs)(n, platforms.as_mut_ptr(), std::ptr::null_mut()) }, "clGetPlatformIDs")?;
 
+        // iniaku-miner passes its OpenCL platform (index or name, QUANTUS_OPENCL_PLATFORM) and the
+        // GPU numbers on it (QUANTUS_GPU_IDS), so "devices" means the same cards as for Epic.
+        let wanted = selected_gpu_ids();
+        let platform_sel = std::env::var("QUANTUS_OPENCL_PLATFORM").ok().map(|s| s.trim().to_lowercase()).filter(|s| !s.is_empty() && s != "auto");
+        let mut global_index = 0usize;
         let mut devices = Vec::new();
-        for platform in platforms {
+        for (pi, platform) in platforms.into_iter().enumerate() {
             let pname = info_string(api.clGetPlatformInfo, platform, CL_PLATFORM_NAME);
+            if let Some(sel) = &platform_sel {
+                let pvendor = info_string(api.clGetPlatformInfo, platform, CL_PLATFORM_VENDOR);
+                let hit = match sel.parse::<usize>() {
+                    Ok(i) => i == pi,
+                    Err(_) => format!("{pname} / {pvendor}").to_lowercase().contains(sel.as_str()),
+                };
+                if !hit {
+                    continue;
+                }
+            }
             let mut dn = 0u32;
             if unsafe { (api.clGetDeviceIDs)(platform, dev_type, 0, std::ptr::null_mut(), &mut dn) } != CL_SUCCESS || dn == 0 {
                 continue;
@@ -142,7 +168,14 @@ impl OpenClEngine {
             if unsafe { (api.clGetDeviceIDs)(platform, dev_type, dn, ids.as_mut_ptr(), std::ptr::null_mut()) } != CL_SUCCESS {
                 continue;
             }
-            for dev in ids {
+            for (di, dev) in ids.into_iter().enumerate() {
+                // GPU number: within the chosen platform, else across all platforms
+                let number = if platform_sel.is_some() { di } else { global_index };
+                global_index += 1;
+                if wanted.as_ref().is_some_and(|w| !w.contains(&number)) {
+                    log::info!(target: "opencl_engine", "OpenCL GPU {number} ({pname}): not selected (--gpu-ids), skipped");
+                    continue;
+                }
                 let name = device_info_string(api, dev, CL_DEVICE_NAME);
                 let vendor = device_info_string(api, dev, CL_DEVICE_VENDOR);
                 let mut cus: cl_uint = 0;
@@ -172,7 +205,10 @@ impl OpenClEngine {
             }
         }
         if devices.is_empty() {
-            return Err("No usable OpenCL GPU found".into());
+            return Err(match &wanted {
+                Some(w) => format!("none of the selected GPUs {w:?} is a usable OpenCL GPU").into(),
+                None => "No usable OpenCL GPU found".into(),
+            });
         }
         let local_size = env_u32("QUANTUS_OPENCL_LOCAL", 256);
         let max_groups = env_u32("QUANTUS_OPENCL_BLOCKS", 4096);

@@ -327,7 +327,23 @@ impl GpuEngine {
         let adapters = instance.enumerate_adapters(wgpu::Backends::PRIMARY);
         let infos: Vec<wgpu::AdapterInfo> = adapters.iter().map(|a| a.get_info()).collect();
 
-        let selected = select_adapters(&infos);
+        let mut selected = select_adapters(&infos);
+        // QUANTUS_GPU_IDS (quantus-iniaku --gpu-ids): GPU numbers in the order above (best effort;
+        // the CUDA and OpenCL engines map them exactly).
+        if let Ok(raw) = std::env::var("QUANTUS_GPU_IDS") {
+            let wanted: Vec<usize> = raw
+                .split(|c: char| c == ',' || c == ';' || c.is_whitespace())
+                .filter_map(|s| s.trim().parse().ok())
+                .collect();
+            if !wanted.is_empty() {
+                selected = selected
+                    .into_iter()
+                    .enumerate()
+                    .filter(|(n, _)| wanted.contains(n))
+                    .map(|(_, i)| i)
+                    .collect();
+            }
+        }
         if selected.is_empty() {
             log::error!(
                 target: "gpu_engine",
