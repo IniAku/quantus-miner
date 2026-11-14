@@ -700,6 +700,7 @@ name = "engine-opencl"
 version = "4.2.1"
 dependencies = [
  "engine-cpu",
+ "env_logger",
  "hex",
  "libloading 0.8.9",
  "log",
