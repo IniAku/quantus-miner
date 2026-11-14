@@ -13,7 +13,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: PoCL + OpenCL loader
-        run: sudo apt-get update && sudo apt-get install -y pocl-opencl-icd ocl-icd-libopencl1 clinfo && clinfo -l
+        run: sudo apt-get update && sudo apt-get install -y pocl-opencl-icd ocl-icd-libopencl1 clinfo && clinfo -l; clinfo | grep -iE "platform name|device name|device type" | head
       - uses: dtolnay/rust-toolchain@1.93.0
       - name: Test engine-opencl
         run: |

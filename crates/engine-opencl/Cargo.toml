@@ -13,4 +13,5 @@ pow-core = { path = "../pow-core" }
 primitive-types = { workspace = true }
 
 [dev-dependencies]
+env_logger = { workspace = true }
 hex = { workspace = true }

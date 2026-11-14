@@ -488,6 +488,7 @@ mod tests {
     use super::*;
 
     fn engine() -> Option<OpenClEngine> {
+        let _ = env_logger::builder().is_test(true).filter_level(log::LevelFilter::Info).try_init();
         std::env::set_var("QUANTUS_OPENCL_ANY_DEVICE", "1");
         match OpenClEngine::try_new(1 << 16, 0) {
             Ok(e) => Some(e),
