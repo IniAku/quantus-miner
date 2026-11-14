@@ -16,4 +16,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y pocl-opencl-icd ocl-icd-libopencl1 clinfo && clinfo -l
       - uses: dtolnay/rust-toolchain@1.93.0
       - name: Test engine-opencl
-        run: cargo test --release -p engine-opencl -- --nocapture 2>&1 | tee test.log; grep -q "test result: ok. 2 passed" test.log && ! grep -q "skipping:" test.log
+        run: |
+          cargo test --release -p engine-opencl -- --nocapture 2>&1 | tee test.log
+          grep -q "test result: ok. 2 passed" test.log
+          ! grep -q "skipping:" test.log
