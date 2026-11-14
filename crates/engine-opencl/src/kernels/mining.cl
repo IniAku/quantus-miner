@@ -78,7 +78,8 @@ inline u64 gf64_add(u64 a, u64 b) {
 //   t = (r1:r0) + r2*EPS, cf = carry; c = r3 + cf; t += cf<<32; t -= c.
 inline u64 reduce128(u32 r0, u32 r1, u32 r2, u32 r3) {
     u64 lo = ((u64)r1 << 32) | (u64)r0;
-    u64 t = lo + (u64)r2 * EPS64;
+    // r2 * (2^32 - 1) without a 64-bit multiply (AMD has none)
+    u64 t = lo + (((u64)r2 << 32) - (u64)r2);
     u32 cf = (t < lo) ? 1u : 0u;
     u32 c = r3 + cf;
     t += (u64)cf << 32;
@@ -89,8 +90,20 @@ inline u64 reduce_hl(u64 lo, u64 hi) {
     return reduce128((u32)lo, (u32)(lo >> 32), (u32)hi, (u32)(hi >> 32));
 }
 
+// Exact 128-bit a*b from four 32x32->64 products. a*b plus mul_hi(a, b) made AMD
+// compilers build several partial products twice (RDNA has no 64-bit multiply).
+inline void mul_wide(u64 a, u64 b, u64 *lo, u64 *hi) {
+    u32 a0 = (u32)a, a1 = (u32)(a >> 32), b0 = (u32)b, b1 = (u32)(b >> 32);
+    u64 p00 = (u64)a0 * b0, p01 = (u64)a0 * b1, p10 = (u64)a1 * b0, p11 = (u64)a1 * b1;
+    u64 mid = (p00 >> 32) + (u64)(u32)p01 + (u64)(u32)p10;
+    *lo = (mid << 32) | (u64)(u32)p00;
+    *hi = p11 + (p01 >> 32) + (p10 >> 32) + (mid >> 32);
+}
+
 inline u64 gf64_mul(u64 a, u64 b) {
-    return reduce_hl(a * b, mul_hi(a, b));
+    u64 lo, hi;
+    mul_wide(a, b, &lo, &hi);
+    return reduce_hl(lo, hi);
 }
 
 inline u64 gf64_sqr(u64 a) {
@@ -140,8 +153,8 @@ inline u64 wide_reduce(Wide w) {
 
 // a*b + w as an exact 128-bit value, then reduced.
 inline u64 mul_add_wide_reduce(u64 a, u64 b, Wide w) {
-    u64 lo = a * b;
-    u64 hi = mul_hi(a, b);
+    u64 lo, hi;
+    mul_wide(a, b, &lo, &hi);
     u64 s = lo + w.l;
     hi += (u64)w.h + ((s < lo) ? 1UL : 0UL);
     return reduce_hl(s, hi);
